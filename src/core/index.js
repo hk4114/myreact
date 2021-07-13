@@ -2,6 +2,10 @@
 let nextUnitOfwork = null;
 // 保存全局根节点
 let wipRoot = null;
+// 当前中断的节点
+let currentRoot = null;
+// 删除的数据
+let deletions = null
 
 // 创建 vdom
 function createElement(type, props, ...children) {
@@ -32,12 +36,40 @@ function createTextElement(text) {
 function createDom(vdom) {
   const dom = vdom.type === 'TEXT' ? document.createTextNode('')
     : document.createElement(vdom.type);
-  Object.keys(vdom.props).filter(key => key !== 'children').forEach(item => {
-    // todo 合成事件 属性兼容
-    dom[item] = vdom.props[item]
-  })
+  updateDom(dom, {}, vdom.props)
   return dom
 }
+
+// 更新 dom 
+function updateDom(dom, prevProps, nextProps) {
+  // 1. 规避children
+  // 2. 老的存在 取消
+  // 3. 新的存在 新增
+  // 没有新老diff
+  Object.keys(prevProps)
+    .filter(name => name !== "children")
+    .filter(name => !(name in nextProps))
+    .forEach(name => {
+      // 删除
+      if (name.slice(0, 2) === 'on') {
+        dom.removeEventListener(name.slice(2).toLowerCase(), prevProps[name], false)
+      } else {
+        dom[name] = ''
+      }
+    })
+
+  Object.keys(nextProps)
+    .filter(name => name !== "children")
+    .forEach(name => {
+      // 删除
+      if (name.slice(0, 2) === 'on') {
+        dom.addEventListener(name.slice(2).toLowerCase(), nextProps[name], false)
+      } else {
+        dom[name] = nextProps[name]
+      }
+    })
+}
+
 
 // 渲染vdom
 function render(vdom, container) {
@@ -50,13 +82,18 @@ function render(vdom, container) {
     dom: container,
     props: {
       children: [vdom] // 初始化第一个任务
-    }
+    },
+    base: currentRoot
   }
+  deletions = [];
   nextUnitOfwork = wipRoot;
 }
 
 function commitRoot() {
+  deletions.forEach(commitWorker)
   commitWorker(wipRoot.child)
+  // 保存当前根节点
+  currentRoot = wipRoot
   wipRoot = null
 }
 
@@ -64,12 +101,15 @@ function commitWorker(fiber) {
   if (!fiber) {
     return
   }
-  let domParentFiber = fiber.parent
-  while (!domParentFiber.dom) {
-    domParentFiber = domParentFiber.parent
+  const domParent = fiber.parent.dom;
+  if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
+    domParent.appendChild(fiber.dom)
+  } else if (fiber.effectTag === "DELETION") {
+    domParent.removeChild(fiber.dom)
+  } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
+    updateDom(fiber.dom, fiber.base.props, fiber.props)
   }
-  const domParent = domParentFiber.dom
-  domParent.appendChild(fiber.dom)
+  // domParent.appendChild(fiber.dom)
   commitWorker(fiber.child)
   commitWorker(fiber.sibling)
 }
@@ -78,7 +118,7 @@ function commitWorker(fiber) {
 function workloop(deadline) {
   // 存在下一个任务 且当前帧未结束
   while (nextUnitOfwork && deadline.timeRemaining() > 1) {
-    nextUnitOfwork = perfromUnitOfWork(nextUnitOfwork)
+    nextUnitOfwork = performUnitOfWork(nextUnitOfwork)
   }
   // 无后续任务 且 根节点存在
   if (!nextUnitOfwork && wipRoot) {
@@ -90,7 +130,7 @@ function workloop(deadline) {
 requestIdleCallback(workloop)
 
 // 获取下一个任务
-function perfromUnitOfWork(fiber) {
+function performUnitOfWork(fiber) {
   // 根据当前任务获取下一个任务
   if (!fiber.dom) {
     // 不是入口
@@ -100,29 +140,9 @@ function perfromUnitOfWork(fiber) {
     fiber.parent.dom.appendChild(fiber.dom)
   }
   const elements = fiber.props.children;
-  // 构建fiber结构
-  // ? 这里不用for的原因是后面会用到这个index -> 插入排序
-  let index = 0;
-  let prevSlibling = null;
-  while (index < elements.length) {
-    let element = elements[index];
-    const newFiber = {
-      type: element.type,
-      props: element.props,
-      parent: fiber,
-      dom: null
-    }
-    if (index === 0) {
-      // 第一个元素，是父fiber的child属性
-      fiber.child = newFiber
-    } else {
-      // 其他
-      prevSlibling.slibling = newFiber
-    }
-    prevSlibling = fiber
-    index++
-    // fiber 基本结构构建完毕
-  }
+
+  reconcileChildren(fiber, elements)
+
   // 找下一个任务
   // 先找子元素元素
   if (fiber.child) {
@@ -135,6 +155,69 @@ function perfromUnitOfWork(fiber) {
       return nextFiber.sibling
     }
     nextFiber = nextFiber.parent
+  }
+}
+
+// 调和元素
+function reconcileChildren(wipFiber, elements) {
+  // 构建fiber结构
+  // ? 这里不用for的原因是后面会用到这个index -> 插入排序
+  let index = 0;
+  let prevSlibling = null;
+  let oldFiber = wipFiber.base && wipFiber.base.child;
+  while (index < elements.length && oldFiber != null) {
+    // while (index < elements.length) {
+    let element = elements[index];
+    // const newFiber = {
+    //   type: element.type,
+    //   props: element.props,
+    //   parent: wipFiber,
+    //   dom: null
+    // }
+    let newFiber = null;
+    // 对比 oldFiber 状态 与 当前 element
+    // 比较类型 diff
+    const sameType = oldFiber && element && oldFiber.type === element.type;
+    if (sameType) {
+      // 复用节点，更新
+      newFiber = {
+        type: oldFiber.type,
+        props: element.props,
+        dom: oldFiber.dom,
+        parent: wipFiber,
+        base: oldFiber,
+        effectTag: 'UPDATE'
+      }
+    }
+    if (!sameType && element) {
+      // 替换
+      newFiber = {
+        type: element.type,
+        props: element.props,
+        dom: null,
+        parent: wipFiber,
+        base: null,
+        effectTag: 'PLACEMENT'
+      }
+    }
+    if (!sameType && oldFiber) {
+      // 删除
+      oldFiber.effectTag = 'DELETION';
+      deletions.push(oldFiber)
+    }
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling
+    }
+    if (index === 0) {
+      // 第一个元素，是父fiber的child属性
+      wipFiber.child = newFiber
+    } else {
+      // 其他
+      prevSlibling.slibling = newFiber
+    }
+    prevSlibling = wipFiber
+    index++
+    // fiber 基本结构构建完毕
   }
 }
 

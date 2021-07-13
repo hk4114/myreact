@@ -16,3 +16,5 @@ step 5: [requestIdleCallback](https://developer.mozilla.org/zh-CN/docs/Web/API/W
 step 6: fiber fn
 
 step 7: commit fn - commitRoot and commitWorker
+
+step 8: reconcileChildren and updateDom
