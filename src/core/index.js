@@ -1,5 +1,7 @@
 // 下一个单元任务 render 会初始化第一个任务
 let nextUnitOfwork = null;
+// 保存全局根节点
+let wipRoot = null;
 
 // 创建 vdom
 function createElement(type, props, ...children) {
@@ -44,12 +46,32 @@ function render(vdom, container) {
   //   render(child, dom)
   // })
   // container.appendChild(dom)
-  nextUnitOfwork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [vdom] // 初始化第一个任务
     }
   }
+  nextUnitOfwork = wipRoot;
+}
+
+function commitRoot() {
+  commitWorker(wipRoot.child)
+  wipRoot = null
+}
+
+function commitWorker(fiber) {
+  if (!fiber) {
+    return
+  }
+  let domParentFiber = fiber.parent
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent
+  }
+  const domParent = domParentFiber.dom
+  domParent.appendChild(fiber.dom)
+  commitWorker(fiber.child)
+  commitWorker(fiber.sibling)
 }
 
 // 调度diff任务或者渲染任务
@@ -57,6 +79,10 @@ function workloop(deadline) {
   // 存在下一个任务 且当前帧未结束
   while (nextUnitOfwork && deadline.timeRemaining() > 1) {
     nextUnitOfwork = perfromUnitOfWork(nextUnitOfwork)
+  }
+  // 无后续任务 且 根节点存在
+  if (!nextUnitOfwork && wipRoot) {
+    commitRoot()
   }
   requestIdleCallback(workloop)
 }

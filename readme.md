@@ -14,3 +14,5 @@ step 4: add render fn
 step 5: [requestIdleCallback](https://developer.mozilla.org/zh-CN/docs/Web/API/Window/requestIdleCallback) fn
 
 step 6: fiber fn
+
+step 7: commit fn - commitRoot and commitWorker
