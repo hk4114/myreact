@@ -38,6 +38,26 @@ function render(vdom, container) {
   container.appendChild(dom)
 }
 
+// 下一个单元任务 render 会初始化第一个任务
+let nextUnitOfwork = null;
+
+// 调度diff任务或者渲染任务
+function workloop(deadline) {
+  // 存在下一个任务 且当前帧未结束
+  while(nextUnitOfwork && deadline.timeRemaining() > 1) {
+    nextUnitOfwork = perfromUnitOfWork(nextUnitOfwork)
+  }
+  requestIdleCallback(workloop)
+}
+// 启动空闲时间处理
+requestIdleCallback(workloop)
+
+// 获取下一个任务
+function perfromUnitOfWork(fiber) {
+  // 根据当前任务获取下一个任务
+
+}
+
 export {
   createElement,
   render
