@@ -1,3 +1,6 @@
+// 下一个单元任务 render 会初始化第一个任务
+let nextUnitOfwork = null;
+
 // 创建 vdom
 function createElement(type, props, ...children) {
   delete props.__source
@@ -23,28 +26,36 @@ function createTextElement(text) {
   }
 }
 
-// 渲染vdom
-function render(vdom, container) {
+// 抽离 dom 相关代码
+function createDom(vdom) {
   const dom = vdom.type === 'TEXT' ? document.createTextNode('')
     : document.createElement(vdom.type);
-
   Object.keys(vdom.props).filter(key => key !== 'children').forEach(item => {
     // todo 合成事件 属性兼容
     dom[item] = vdom.props[item]
-  })    
-  vdom.props.children.forEach(child => {
-    render(child, dom)
   })
-  container.appendChild(dom)
+  return dom
 }
 
-// 下一个单元任务 render 会初始化第一个任务
-let nextUnitOfwork = null;
+// 渲染vdom
+function render(vdom, container) {
+  // 原先 递归 的做法不再适用，而是应该使用 fiber和requestIdleCallback
+  // vdom.props.children.forEach(child => {
+  //   render(child, dom)
+  // })
+  // container.appendChild(dom)
+  nextUnitOfwork = {
+    dom: container,
+    props: {
+      children: [vdom] // 初始化第一个任务
+    }
+  }
+}
 
 // 调度diff任务或者渲染任务
 function workloop(deadline) {
   // 存在下一个任务 且当前帧未结束
-  while(nextUnitOfwork && deadline.timeRemaining() > 1) {
+  while (nextUnitOfwork && deadline.timeRemaining() > 1) {
     nextUnitOfwork = perfromUnitOfWork(nextUnitOfwork)
   }
   requestIdleCallback(workloop)
@@ -55,7 +66,50 @@ requestIdleCallback(workloop)
 // 获取下一个任务
 function perfromUnitOfWork(fiber) {
   // 根据当前任务获取下一个任务
-
+  if (!fiber.dom) {
+    // 不是入口
+    fiber.dom = createDom(fiber)
+  }
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+  const elements = fiber.props.children;
+  // 构建fiber结构
+  // ? 这里不用for的原因是后面会用到这个index -> 插入排序
+  let index = 0;
+  let prevSlibling = null;
+  while (index < elements.length) {
+    let element = elements[index];
+    const newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: fiber,
+      dom: null
+    }
+    if (index === 0) {
+      // 第一个元素，是父fiber的child属性
+      fiber.child = newFiber
+    } else {
+      // 其他
+      prevSlibling.slibling = newFiber
+    }
+    prevSlibling = fiber
+    index++
+    // fiber 基本结构构建完毕
+  }
+  // 找下一个任务
+  // 先找子元素元素
+  if (fiber.child) {
+    return fiber.child
+  }
+  // 没有子元素 找兄弟元素
+  let nextFiber = fiber;
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
 }
 
 export {
