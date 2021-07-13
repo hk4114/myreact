@@ -23,8 +23,19 @@ function createTextElement(text) {
   }
 }
 
+// 渲染vdom
 function render(vdom, container) {
-  container.innerHTML = `<pre>${JSON.stringify(vdom)}</pre>`
+  const dom = vdom.type === 'TEXT' ? document.createTextNode('')
+    : document.createElement(vdom.type);
+
+  Object.keys(vdom.props).filter(key => key !== 'children').forEach(item => {
+    // todo 合成事件 属性兼容
+    dom[item] = vdom.props[item]
+  })    
+  vdom.props.children.forEach(child => {
+    render(child, dom)
+  })
+  container.appendChild(dom)
 }
 
 export {
