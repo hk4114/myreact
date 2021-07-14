@@ -135,7 +135,7 @@ function performUnitOfWork(fiber) {
   } else {
     updateHostComponent(fiber)
   }
-
+  // fiber遍历顺序 child => child.sibling => finish or no => parent
   if (fiber.child) {
     return fiber.child
   }
@@ -164,9 +164,9 @@ function updateHostComponent(fiber) {
   reconcileChildren(fiber, fiber.props.children)
 }
 
-function reconcileChildren(wipFiber, elements) {
+function reconcileChildren(wipNode, elements) {
   let index = 0
-  let oldFiber = wipFiber.base && wipFiber.base.child
+  let oldFiber = wipNode.base && wipNode.base.child
   let prevSibling = null
   while (index < elements.length || oldFiber != null) {
     const element = elements[index]
@@ -180,7 +180,7 @@ function reconcileChildren(wipFiber, elements) {
         type: oldFiber.type,
         props: element.props,
         dom: oldFiber.dom,
-        parent: wipFiber,
+        parent: wipNode,
         base: oldFiber,
         effectTag: "UPDATE",
       }
@@ -191,7 +191,7 @@ function reconcileChildren(wipFiber, elements) {
         type: element.type,
         props: element.props,
         dom: null,
-        parent: wipFiber,
+        parent: wipNode,
         base: null,
         effectTag: "PLACEMENT",
       }
@@ -206,7 +206,7 @@ function reconcileChildren(wipFiber, elements) {
       oldFiber = oldFiber.sibling
     }
     if (index === 0) {
-      wipFiber.child = newFiber
+      wipNode.child = newFiber
     } else if (element) {
       prevSibling.sibling = newFiber
     }
@@ -215,6 +215,7 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
+/*----------- useState start ----------------*/
 function useState(init) {
   const oldHook = wipFiber.base && wipFiber.base.hooks && wipFiber.base.hooks[hookIndex]
   const hook = {
@@ -238,6 +239,7 @@ function useState(init) {
   hookIndex++
   return [hook.state, setState]
 }
+/*----------- useState start ----------------*/
 
 /*----------- component transfer start ----------------*/
 class Component {
