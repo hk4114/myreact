@@ -1,3 +1,51 @@
+let nextUnitOfWork = null
+
+function workloop(deadline) {
+  while (nextUnitOfWork && deadline.timeRemaining()) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+  }
+  requestIdleCallback(workloop)
+}
+requestIdleCallback(workloop)
+
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+
+  const elements = fiber.props.children;
+  let prevSibling = null;
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+    const newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: fiber,
+      dom: null
+    };
+    if (i === 0) {
+      fiber.child = newFiber
+    } else if (element) {
+      prevSibling.sibling = newFiber
+    }
+    prevSibling = newFiber
+  }
+
+  if(fiber.child) {
+    return fiber.child
+  }
+  let nextFiber = fiber;
+  while(nextFiber) {
+    if(nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
+}
+
 function createElement(type, props, ...children) {
   delete props.__source
   return {
@@ -19,17 +67,23 @@ function createTextElement(text) {
   }
 }
 
-function render(vdom, container) {
-  const dom = vdom.type === 'TEXT' ? document.createTextNode("") : document.createElement(vdom.type)
+function createDom(vdom) {
+  const dom = vdom.type === 'TEXT' ? document.createTextNode("") : document.createElement(vdom.type);
   Object.keys(vdom.props).forEach(name => {
     if (name !== 'children') {
       dom[name] = vdom.props[name]
     }
   })
-  vdom.props.children.forEach(child => {
-    render(child, dom)
-  })
-  container.appendChild(dom)
+  return dom
+}
+
+function render(vdom, container) {
+  nextUnitOfWork = {
+    dom: container,
+    props: {
+      children: [vdom]
+    }
+  }
 }
 
 export default {
