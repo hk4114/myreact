@@ -34,12 +34,12 @@ function performUnitOfWork(fiber) {
     prevSibling = newFiber
   }
 
-  if(fiber.child) {
+  if (fiber.child) {
     return fiber.child
   }
   let nextFiber = fiber;
-  while(nextFiber) {
-    if(nextFiber.sibling) {
+  while (nextFiber) {
+    if (nextFiber.sibling) {
       return nextFiber.sibling
     }
     nextFiber = nextFiber.parent
