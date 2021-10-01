@@ -1,8 +1,12 @@
 let nextUnitOfWork = null;
+let wipRoot = null;
 
 function workloop(deadline) {
   while (nextUnitOfWork && deadline.timeRemaining() >= 1) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+  }
+  if(!nextUnitOfWork && wipRoot) {
+    commitRoot()
   }
   requestIdleCallback(workloop)
 }
@@ -11,9 +15,6 @@ requestIdleCallback(workloop)
 function performUnitOfWork(fiber) {
   if(!fiber.dom) {
     fiber.dom = createDom(fiber)
-  }
-  if(fiber.parent) {
-    fiber.parent.dom.appendChild(fiber.dom)
   }
   
   const elements = fiber.props.children;
@@ -50,6 +51,18 @@ function performUnitOfWork(fiber) {
   }
 }
 
+function commitRoot() {
+  commitWork(wipRoot.child);
+  wipRoot = null
+}
+
+function commitWork(fiber) {
+  if(!fiber) return;
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
 
 function createElement(type, props, ...children) {
   delete props.__source
@@ -83,12 +96,13 @@ function createDom(vdom) {
 }
 
 function render(vdom, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [vdom]
     }
   }
+  nextUnitOfWork = wipRoot
 }
 
 export default {
