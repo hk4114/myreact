@@ -27,14 +27,14 @@ const container = document.getElementById('root')
 
 // rerender("World")
 
-function App(props) {
+function Counter() {
+  const [state, setState] = React.useState(1)
   return (
-    <h1>hi~ {props.name}</h1>
+      <h1 onClick={() => setState(c => c + 1)}>
+      Count: {state}
+      </h1>
   )
 }
-
-const element = (
-  <App name='foo' />
-)
+const element = <Counter />
 
 React.render(element, container)

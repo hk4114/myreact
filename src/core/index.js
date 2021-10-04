@@ -2,6 +2,7 @@ let nextUnitOfWork = null;
 let wipRoot = null;
 let currentRoot = null;
 let deletions = null;
+let wipFiber = null;
 
 function workloop(deadline) {
   while (nextUnitOfWork && deadline.timeRemaining() >= 1) {
@@ -44,6 +45,8 @@ function updateHostComponent(fiber) {
 }
 
 function updateFunctionComponent(fiber) {
+  wipFiber = fiber;
+  wipFiber.hook = [];
   const children = [fiber.type(fiber.props)]
   reconcileChildren(fiber, children)
 }
@@ -140,6 +143,34 @@ function commitDeletion(fiber, domParent) {
   }
 }
 
+function useState(initial) {
+  const oldHook = wipFiber.alternate && wipFiber.alternate.hook;
+  
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: []
+  }
+  const actions = oldHook ? oldHook.queue : [];
+  
+  actions.forEach(action => {
+    hook.state = action(hook.state)
+  })
+
+  const setState = action => {
+    hook.queue.push(action)
+    // 更新页面操作
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot
+    }
+    nextUnitOfWork = wipRoot;
+    deletions = []
+  }
+  wipFiber.hook = hook;
+  return [hook.state, setState]
+}
+
 function createElement(type, props, ...children) {
   delete props.__source
   return {
@@ -205,5 +236,6 @@ function render(vdom, container) {
 
 export default {
   createElement,
-  render
+  render,
+  useState
 }
