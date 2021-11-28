@@ -80,6 +80,7 @@ function useState(init) {
   }
 
   const actions = oldHook ? oldHook.queue : []
+  // actions.forEach(action => { hook.state = action })
   actions.forEach(action => {
     hook.state = action(hook.state)
   })
@@ -292,8 +293,28 @@ function commitDeletion(fiber, domParent) {
   }
 }
 
+class Component {
+  constructor(props) {
+    this.props = props
+  }
+}
+
+function transfer(Component) {
+  return function (props) {
+    const component = new Component(props)
+    let initState = useState
+    let [state, setState] = initState(component.state)
+    component.props = props
+    component.state = state
+    component.setState = setState
+    return component.render()
+  }
+}
+
 export default {
   createElement,
   render,
-  useState
+  useState,
+  Component,
+  transfer
 }
