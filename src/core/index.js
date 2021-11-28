@@ -25,6 +25,10 @@ let wipRoot = null;
 let currentRoot = null;
 // 储存删除的 fiber，渲染 DOM 时，遍历 deletions 删除旧 fiber；
 let deletions = null;
+// 当前工作单元 fiber
+let currentWipFiber = null;
+// hook 对应下标
+let hookIndex = null
 
 /**
  * workLoop 工作循环函数
@@ -52,9 +56,50 @@ function updateHostCmp(fiber) {
 // 函数组件,通过执行函数获取fiber.props.children
 function updateFnCmp(fiber) {
   console.log('functional component fiber', fiber)
+  hookIndex = 0
+  currentWipFiber = fiber;
+  // 当前工作单元 fiber 的 hook
+  currentWipFiber.hooks = [];
   const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children)
 }
+
+/**
+ * useState 状态hook
+ * @param {*} initial 
+ */
+function useState(init) {
+  const oldHook =
+    currentWipFiber.alternate &&
+    currentWipFiber.alternate.hooks &&
+    currentWipFiber.alternate.hooks[hookIndex]
+
+  const hook = {
+    state: oldHook ? oldHook.state : init,
+    queue: [],
+  }
+
+  const actions = oldHook ? oldHook.queue : []
+  // actions.forEach(action => { hook.state = action })
+  actions.forEach(action => {
+    hook.state = action(hook.state)
+  })
+
+  const setState = action => {
+    hook.queue.push(action)
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    }
+    nextUnitOfWork = wipRoot
+    deletions = []
+  }
+  currentWipFiber.hooks.push(hook)
+  hookIndex++
+  return [hook.state, setState]
+}
+
 
 /**
  * performUnitOfWork 处理工作单元
@@ -177,7 +222,7 @@ function updateDom(dom, prevProps, nextProps) {
           name.slice(2).toLowerCase(),
           nextProps[name],
           false)
-      } else {
+      } else if (dom) {
         dom[name] = nextProps[name]
       }
     }
@@ -239,16 +284,37 @@ function commitWork(fiber) {
  * commitDeletion 删除节点
  * @param {fiber} fiber
  * @param {domParent} dom
- */ 
+ */
 function commitDeletion(fiber, domParent) {
-  if(fiber.dom) {
+  if (fiber.dom) {
     domParent.removeChild(fiber.dom)
   } else {
     commitDeletion(fiber.child, domParent)
   }
 }
 
+class Component {
+  constructor(props) {
+    this.props = props
+  }
+}
+
+function transfer(Component) {
+  return function (props) {
+    const component = new Component(props)
+    let initState = useState
+    let [state, setState] = initState(component.state)
+    component.props = props
+    component.state = state
+    component.setState = setState
+    return component.render()
+  }
+}
+
 export default {
   createElement,
-  render
+  render,
+  useState,
+  Component,
+  transfer
 }

@@ -414,3 +414,70 @@ function commitDeletion(fiber, domParent) {
   }
 }
 ```
+
+## step6 hooks 状态管理
+```js
+function Counter() {
+  const [state, setState] = React.useState(1);
+  const [name, setName] = React.useState('123123')
+  return (
+    <h1>
+      <span onClick={() => setState(c => c + 1)}>
+        Count:</span> {state} <br />
+      <input type="text" value={name} onBlur={(v) => setName(() => v.target.value)} />
+      {name}
+    </h1>
+  )
+}
+const element = <Counter />
+```
+函数组件拥有自己的状态，且可以获取、更新状态。已知需要一个 useState 方法用来获取、更新状态。
+**渲染函数组件的前提是，执行该函数组件。** Counter 想要更新计数，就会在每次更新都执行一次 Counter 函数。
+1. 新增全局变量 currentWipFiber/hookIndex
+```js
+// 当前工作单元 fiber
+let currentWipFiber = null;
+// hook 对应下标
+let hookIndex = null;
+
+function updateFnCmp(fiber) {
+  hookIndex = 0
+  currentWipFiber = fiber;
+  // 当前工作单元 fiber 的 hook
+  currentWipFiber.hooks = [];
+  // code
+}
+```
+2. 新增 useState 函数
+```js
+function useState(init) {
+  const oldHook =
+    currentWipFiber.alternate &&
+    currentWipFiber.alternate.hooks &&
+    currentWipFiber.alternate.hooks[hookIndex]
+
+  const hook = {
+    state: oldHook ? oldHook.state : init,
+    queue: [],
+  }
+
+  const actions = oldHook ? oldHook.queue : []
+  actions.forEach(action => {
+    hook.state = action(hook.state)
+  })
+
+  const setState = action => {
+    hook.queue.push(action)
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    }
+    nextUnitOfWork = wipRoot
+    deletions = []
+  }
+  currentWipFiber.hooks.push(hook)
+  hookIndex++
+  return [hook.state, setState]
+}
+```
