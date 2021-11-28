@@ -1,8 +1,17 @@
 import React from './core';
-const App = props => <h1>hello {props.name}</h1>
-const element = (
-  <App name='function component' />
-)
+function Counter() {
+  const [state, setState] = React.useState(1);
+  const [name, setName] = React.useState('hi~')
+  return (
+    <h1>
+      <span onClick={() => setState(c => c + 1)}>
+        Count:</span> {state} <br />
+      <input type="text" value={name} onBlur={(v) => setName(() => v.target.value)} />
+      {name}
+    </h1>
+  )
+}
+const element = <Counter />
 React.render(element, document.getElementById("root"))
 
 // const rerender = value => {
