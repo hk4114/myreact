@@ -207,6 +207,23 @@ function commitWork(fiber) {
 ```
 
 ## step4 协调 diff
+```js
+import React from './core'
+const container = document.getElementById("root")
+const rerender = value => {
+  const element = (
+      <div>
+          <input onInput={updateValue} value={value} />
+          <h2>Hello {value}</h2>
+      </div>
+  )
+  React.render(element, container)
+}
+const updateValue = e => {
+  rerender(e.target.value)
+}
+rerender("World")
+```
 通过对fiber的比较，判断是否要更新dom，目的：减少对真实 DOM 的操作次数。
 1. 新增全局变量 currenRoot，保存根节点更新前的fiber tree
 2. fiber 新增 alternate 属性，保存 fiber 更新前的 fiber tree
@@ -320,5 +337,80 @@ function reconcileChildren (wipFiber, elements) {
     deletions.push(oldFiber)
   }
   // code
+}
+```
+
+## step5 函数式组件
+```js
+import React from './core';
+const App = props => <h1>hello {props.name}</h1>
+const element = (
+  <App name='function component' />
+)
+React.render(element, document.getElementById("root"))
+```
+函数式组件与html标签组件相比
+- 函数组件的fiber没有dom节点
+- 函数组件的children需要运行函数得到
+
+为了解决这两个问题
+1. 修改 performUnitOfWork，根据 fiber 类型，执行 fiber 工作单元
+```js
+function performUnitOfWork(fiber) {
+    // 是否是函数类型组件
+  const isFnCmp = fiber.type instanceof Function;
+  if (isFnCmp) {
+    updateFnCmp(fiber)
+  } else {
+    updateHostCmp(fiber)
+  }
+  // code
+}
+// 非函数组件
+function updateHostCmp(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+  reconcileChildren(fiber, fiber.props.children)
+}
+
+// 函数组件,通过执行函数获取fiber.props.children
+function updateFnCmp(fiber) {
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children)
+}
+```
+2. commitWork 执行渲染，由于函数组件没有dom，所以需要兼容父节点的获取逻辑
+```js
+function commitWork(fiber) {
+  // 修改 domParent 获取逻辑,如果不存在dom则向上遍历父节点
+  // const domParent = fiber.parent.dom
+  let domParentFiber = fiber.parent;
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+  const domParent = domParentFiber.dom;
+}
+```
+1. 删除节点，通过递归寻找有dom节点的 child fiber
+```js
+function commitWork(fiber) {
+  // code
+  // domParent.removeChild(fiber.dom)
+  commitDeletion(fiber.dom, domParent)
+}
+/**
+ * commitDeletion 删除节点
+ * @param {fiber} fiber
+ * @param {domParent} dom
+ */ 
+function commitDeletion(fiber, domParent) {
+  // fiber 存在 dom 则直接删除
+  if(fiber.dom) {
+    domParent.removeChild(fiber.dom)
+  } else {
+    // 没有 dom 节点，则继续找它的子节点进行删除
+    commitDeletion(fiber.child, domParent)
+  }
 }
 ```

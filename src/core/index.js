@@ -41,18 +41,34 @@ function workloop(deadline) {
 }
 requestIdleCallback(workloop)
 
+// 非函数组件
+function updateHostCmp(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+  reconcileChildren(fiber, fiber.props.children)
+}
+
+// 函数组件,通过执行函数获取fiber.props.children
+function updateFnCmp(fiber) {
+  console.log('functional component fiber', fiber)
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children)
+}
+
 /**
  * performUnitOfWork 处理工作单元
  * @param {fiber} fiber
  * @return {nextUnitOfWork} 下一个工作单元
  */
 function performUnitOfWork(fiber) {
-  if (!fiber.dom) {
-    fiber.dom = createDom(fiber)
+  // 是否是函数类型组件
+  const isFnCmp = fiber.type instanceof Function;
+  if (isFnCmp) {
+    updateFnCmp(fiber)
+  } else {
+    updateHostCmp(fiber)
   }
-
-  const elements = fiber.props.children;
-  reconcileChildren(fiber, elements)
 
   if (fiber.child) {
     return fiber.child
@@ -200,11 +216,15 @@ function commitRoot() {
  */
 function commitWork(fiber) {
   if (!fiber) return;
-  const domParent = fiber.parent.dom;
+  let domParentFiber = fiber.parent;
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+  const domParent = domParentFiber.dom;
   if (fiber.effectTag === 'PLACEMENT' && fiber.dom !== null) {
     domParent.appendChild(fiber.dom);
   } else if (fiber.effectTag === 'DELETION') {
-    domParent.removeChild(fiber.dom)
+    commitDeletion(fiber.dom, domParent)
   } else if (fiber.effectTag === 'UPDATE') {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props)
   }
@@ -213,6 +233,19 @@ function commitWork(fiber) {
   commitWork(fiber.child)
   // 渲染兄弟节点
   commitWork(fiber.sibling)
+}
+
+/**
+ * commitDeletion 删除节点
+ * @param {fiber} fiber
+ * @param {domParent} dom
+ */ 
+function commitDeletion(fiber, domParent) {
+  if(fiber.dom) {
+    domParent.removeChild(fiber.dom)
+  } else {
+    commitDeletion(fiber.child, domParent)
+  }
 }
 
 export default {
