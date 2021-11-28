@@ -51,7 +51,7 @@ export default {
 }
 ```
 
-## step2
+## step2 可中断渲染 fiber
 `vdom.props.children.forEach(child => render(child, dom))` 通过递归渲染ui不可中断，页面卡顿。
 如何解决页面元素复杂繁多造成页面卡顿呢？
 1. requestIdleCallback 利用浏览器空闲时间进行渲染，如果有优先任务则先处理优先级更高的任务。
@@ -146,5 +146,62 @@ function render(vdom, container) {
       children: [vdom]
     }
   }
+}
+```
+
+## step3 渲染提交阶段
+
+渲染过程是可中断的，为了不给用户呈现未完成渲染的ui,需要进行优化：
+1. 把 performUnitOfWork 中关于把子节点添加至父节点的逻辑删除，新增一个根节点变量，存储 fiber 根节点，当所有 fiber 都工作完成时，nextUnitOfWork 为 undefined，这时再渲染真实 DOM。
+2. 新增 commitRoot 函数，执行渲染真实 DOM 操作，递归将 fiber tree 渲染为真实 DOM；
+
+```js
+function performUnitOfWork(fiber) {
+    // 把这段删了
+    if (fiber.parent) {
+       fiber.parent.dom.appendChild(fiber.dom)
+    }
+}
+
+let wipRoot = null;
+
+function render(vdom, container) {
+  wipRoot = {
+    dom: container,
+    props: {
+      children: [vdom]
+    }
+  }
+  // 下一个工作单元是根节点
+  nextUnitOfWork = wipRoot
+}
+
+function workloop(deadline) {
+  // ...code
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot()
+  }
+  // ...code
+}
+
+// 全部工作单元完成后，将fiber-tree渲染为真实dom
+function commitRoot() {
+  commitWork(wipRoot.child);
+  // 需要设置null,避免workloop不断执行
+  wipRoot = null;
+}
+
+/**
+ * performUnitOfWork 处理工作单元
+ * @param {fiber} fiber
+ */
+function commitWork(fiber) {
+  if(!fiber) return;
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  // 渲染子节点
+  commitWork(fiber.child)
+  // 渲染兄弟节点
+  commitWork(fiber.sibling)
 }
 ```

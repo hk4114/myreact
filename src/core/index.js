@@ -19,14 +19,19 @@ function createTextElement(nodeValue) {
   }
 }
 // --------------------- babel compolie jsx end---------------------------
+let nextUnitOfWork = null;
+let wipRoot = null;
+
 /**
  * workLoop 工作循环函数
  * @param {deadline} 截止时间
  */
-let nextUnitOfWork = null;
 function workloop(deadline) {
   while (nextUnitOfWork && deadline.timeRemaining() >= 1) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+  }
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot()
   }
   requestIdleCallback(workloop)
 }
@@ -38,14 +43,8 @@ requestIdleCallback(workloop)
  * @return {nextUnitOfWork} 下一个工作单元
  */
 function performUnitOfWork(fiber) {
-  // 1.添加 dom 节点
-  // 2.新建 filber
-  // 3.返回下一个工作单元（fiber）
   if (!fiber.dom) {
     fiber.dom = createDom(fiber)
-  }
-  if (fiber.parent) {
-    fiber.parent.dom.appendChild(fiber.dom) // -> vdom.props.children.forEach(child => render(child, dom))
   }
 
   let prevSibling = null;
@@ -100,12 +99,35 @@ function createDom(vdom) {
  * @param {container} 真实 DOM
  */
 function render(vdom, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [vdom]
     }
   }
+  // 下一个工作单元是根节点
+  nextUnitOfWork = wipRoot
+}
+
+// 全部工作单元完成后，将fiber-tree渲染为真实dom
+function commitRoot() {
+  commitWork(wipRoot.child);
+  // 需要设置null,避免workloop不断执行
+  wipRoot = null;
+}
+
+/**
+ * performUnitOfWork 处理工作单元
+ * @param {fiber} fiber
+ */
+function commitWork(fiber) {
+  if(!fiber) return;
+  const domParent = fiber.parent.dom;
+  domParent.appendChild(fiber.dom);
+  // 渲染子节点
+  commitWork(fiber.child)
+  // 渲染兄弟节点
+  commitWork(fiber.sibling)
 }
 
 export default {
