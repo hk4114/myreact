@@ -1,34 +1,30 @@
-import React from './core'
+import React from './core';
+const App = props => <h1>hello {props.name}</h1>
+const element = (
+  <App name='function component' />
+)
+React.render(element, document.getElementById("root"))
 
-class Demo extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      count: 1
-    }
-  }
-  handleClick = () => {
-    this.setState({
-      count: this.state.count + 1
-    })
-  }
-  render() {
-    return <div>
-      <h2 onClick={this.handleClick}>{this.state.count}</h2>
-    </div>
-  }
-}
-Demo = React.transfer(Demo)
+// const rerender = value => {
+//   const element = (
+//       <div>
+//           <input onInput={updateValue} value={value} />
+//           <h2>Hello {value}</h2>
+//       </div>
+//   )
+//   React.render(element, container)
+// }
 
-function App(props) {
-  const [count, setCount] = React.useState(1)
-  return <div id="container" className="red">
-    <h1>{props.title}, {count}</h1>
-    <button onClick={() => setCount(count + 1)}>??</button>
-    <hr />
-    <Demo></Demo>
-  </div>
-}
-let element = <App title="huakang" />
+// const updateValue = e => {
+//   rerender(e.target.value)
+// }
 
-React.render(element, document.getElementById('root'))
+// rerender("World")
+
+// const element = <div>
+//   <h1>demo</h1>
+//   <p>for sample <b>react</b></p>
+//   <a href="https://github.com/hk4114/myreact">repo</a>
+// </div>
+
+// React.render(element, document.getElementById('root'))
