@@ -205,3 +205,120 @@ function commitWork(fiber) {
   commitWork(fiber.sibling)
 }
 ```
+
+## step4 协调 diff
+通过对fiber的比较，判断是否要更新dom，目的：减少对真实 DOM 的操作次数。
+1. 新增全局变量 currenRoot，保存根节点更新前的fiber tree
+2. fiber 新增 alternate 属性，保存 fiber 更新前的 fiber tree
+
+```js
+// 保存根节点更新前的 fiber tree
+let currentRoot = null;
+
+function render(vdom, container) {
+  wipRoot = {
+    // ...code
+    alternate: currentRoot
+  }
+  nextUnitOfWork = wipRoot
+}
+
+function commitRoot() {
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null;
+}
+```
+3. 将 performUnitOfWork 中关于新建 fiber 的逻辑抽离，新建函数 reconcileChildren
+```js
+function performUnitOfWork(fiber) {
+  // ...code
+  const elements = fiber.props.children;
+  reconcileChildren(fiber, elements)
+  // ...code
+}
+/**
+ * 协调子节点
+ * @param {fiber} fibercurrentRoot
+ * @param {elements} fiber 的 子节点
+ */
+function reconcileChildren(wipFiber, elements) {
+  let prevSibling = null;
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+    let newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: wipFiber,
+      dom: null
+    }
+    if (i === 0) {
+      wipFiber.child = newFiber
+    } else if (element) {
+      prevSibling.sibling = newFiber
+    }
+    prevSibling = newFiber
+  }
+}
+```
+4. 在 reconcileChildren 中对比新旧 fiber 
+```js
+function reconcileChildren(wipFiber, elements) {
+  let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+  let prevSibling = null;
+  for (let index = 0; index < elements.length || oldFiber != null; index++) {
+    const element = elements[index]
+    let newFiber = null;
+    // 判断类型是否相同
+    const sameType =
+      oldFiber &&
+      element &&
+      element.type === oldFiber.type;
+    // 类型相同：保留 dom，仅更新 props，effectTag 为 UPDATE
+    if (sameType) {
+      newFiber = {
+        type: oldFiber.type,
+        props: element.props,
+        dom: oldFiber.dom,
+        parent: wipFiber,
+        alternate: oldFiber,
+        effectTag: "UPDATE",
+      }
+    }
+    // 类型不同，有新元素：创建新节点，effectTag PLACEMENT
+    if (element && !sameType) {
+      newFiber = {
+        type: element.type,
+        props: element.props,
+        dom: null,
+        parent: wipFiber,
+        alternate: null,
+        effectTag: "PLACEMENT",
+      }
+    }
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling
+    }
+    // ...code
+  }
+}
+```
+5. 删除fiber节点: 新建 deletions 数组存储需删除的 fiber 节点，渲染 DOM 时，遍历 deletions 删除旧 fiber；
+```js
+// 储存删除的 fiber，渲染 DOM 时，遍历 deletions 删除旧 fiber；
+let deletions = null;
+function render(vdom, container) {
+  // ...code
+  deletions = [];
+}
+
+function reconcileChildren (wipFiber, elements) {
+  // code
+  // 类型不同，有旧元素：删除旧节点，effectTag DELETION
+  if(!sameType && oldFiber) {
+    oldFiber.effectTag = 'DELETION';
+    deletions.push(oldFiber)
+  }
+  // code
+}
+```
