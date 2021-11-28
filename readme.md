@@ -1,12 +1,20 @@
-- JSX
-- commit 
-- useState
-- class component
-
-
+## step 1
+jsx 解析 以及 vdom-tree 渲染
 ```js
+// index.js
+import React from './core'
+
+const element = <div>
+  <h1>demo</h1>
+  <p>for sample <b>react</b></p>
+  <a href="https://github.com/hk4114/myreact">repo</a>
+</div>
+
+React.render(element, document.getElementById('root'))
+
 // core.js
 function createElement(type, props, ...children) {
+  delete props.__source
   return {
     type,
     props: {
@@ -16,45 +24,31 @@ function createElement(type, props, ...children) {
   }
 }
 
-function createTextElement(text) {
+function createTextElement(nodeValue) {
   return {
     type: 'TEXT',
     props: {
-      nodeValue: text,
-      children: []
+      children: [],
+      nodeValue
     }
   }
 }
 
 function render(vdom, container) {
-  const dom = vdom.type === 'TEXT' ? document.createTextNode("") : document.createElement(vdom.type)
+  const dom = vdom.type === 'TEXT' ? document.createTextNode('') : document.createElement(vdom.type);
   Object.keys(vdom.props).forEach(name => {
-    if (name !== 'children') {
+    if(name !== 'children') {
       dom[name] = vdom.props[name]
     }
   })
-  vdom.props.children.forEach(child => {
-    render(child, dom)
-  })
+  vdom.props.children.forEach(child => render(child, dom))
   container.appendChild(dom)
 }
 
 export default {
-  render,
-  createElement
+  createElement,
+  render
 }
-
-// index.js
-import React from './core'
-
-let element = <div>
-  <h1>kanelogger</h1>
-  <p>info </p>
-  <a href="https://www.yuque.com/">yuque</a>
-</div>
-
-React.render(element, document.getElementById('root'))
 ```
 
-[demo](https://github.com/hk4114/myreact)
-
+## step2 vdom-tree -> fiber
