@@ -319,6 +319,57 @@ function reconcileChildren(wipFiber, elements) {
     // ...code
   }
 }
+
+function commitWork(fiber) {
+  if (!fiber) return;
+  const domParent = fiber.parent.dom;
+  if (fiber.effectTag === 'PLACEMENT' && fiber.dom !== null) {
+    domParent.appendChild(fiber.dom);
+  } else if (fiber.effectTag === 'DELETION') {
+    domParent.removeChild(fiber.dom)
+  } else if (fiber.effectTag === 'UPDATE') {
+    updateDom(fiber.dom, fiber.alternate.props, fiber.props)
+  }
+  // code
+}
+
+function createDom(vdom) {
+  const dom = vdom.type === 'TEXT'
+    ? document.createTextNode('')
+    : document.createElement(vdom.type);
+  updateDom(dom, {}, vdom.props)
+  return dom
+}
+
+function updateDom(dom, prevProps, nextProps) {
+  // clear oldProps and add newProps
+  Object.keys(prevProps).forEach(name => {
+    // remove EventListener
+    if (name !== "children" && !(name in nextProps)) {
+      if (name.slice(0, 2) === 'on') {
+        dom.removeEventListener(
+          name.slice(2).toLowerCase(),
+          prevProps[name],
+          false)
+      } else {
+        dom[name] = ''
+      }
+    }
+  })
+  Object.keys(nextProps).forEach(name => {
+    // add EventListener
+    if (name !== "children") {
+      if (name.slice(0, 2) === 'on') {
+        dom.addEventListener(
+          name.slice(2).toLowerCase(),
+          nextProps[name],
+          false)
+      } else {
+        dom[name] = nextProps[name]
+      }
+    }
+  })
+}
 ```
 5. 删除fiber节点: 新建 deletions 数组存储需删除的 fiber 节点，渲染 DOM 时，遍历 deletions 删除旧 fiber；
 ```js
@@ -338,8 +389,12 @@ function reconcileChildren (wipFiber, elements) {
   }
   // code
 }
-```
 
+function commitRoot() {
+  deletions.forEach(commitWork)
+  // ...code
+}
+```
 ## step5 函数式组件
 ```js
 import React from './core';

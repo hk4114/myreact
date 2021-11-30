@@ -269,7 +269,7 @@ function commitWork(fiber) {
   if (fiber.effectTag === 'PLACEMENT' && fiber.dom !== null) {
     domParent.appendChild(fiber.dom);
   } else if (fiber.effectTag === 'DELETION') {
-    commitDeletion(fiber.dom, domParent)
+    commitDeletion(fiber, domParent)
   } else if (fiber.effectTag === 'UPDATE') {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props)
   }
